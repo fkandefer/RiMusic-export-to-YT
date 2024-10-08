@@ -12,6 +12,42 @@ import argparse
 import re
 import datetime
 from pathlib import Path
+import os
+
+import pandas as pd
+import google.oauth2.credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+
+
+# authenticate function
+def authenticate():
+    """
+    User authentication via OAuth2 for accessing the YouTube API.
+    It checks for an existing token and refreshes it if needed.
+
+    Returns:
+        creds: The authenticated credentials file to be used with YouTube API.
+    """
+    creds = None
+    if os.path.exists("token.json"):
+        creds = google.oauth2.credentials.Credentials.from_authorized_user_file("token.json", SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+            creds = flow.run_local_server(port=0)
+
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+
+    return creds
 
 
 def get_youtube_playlist_name(file: str) -> str:
@@ -27,14 +63,14 @@ def get_youtube_playlist_name(file: str) -> str:
         not matched.
 
     Examples:
-    >>> youtube_playlist_name('RMPlaylist_MyPlaylist_20221010.csv')
+    >>> get_youtube_playlist_name('RMPlaylist_MyPlaylist_20221010.csv')
     '2022-10-10 MyPlaylist'
 
-    >>> youtube_playlist_name('RMPlaylist_SummerHits_20230915.csv')
+    >>> get_youtube_playlist_name('RMPlaylist_SummerHits_20230915.csv')
     '2023-09-15 SummerHits'
 
     Filename not matching the pattern:
-    >>> youtube_playlist_name('InvalidFileName.csv')
+    >>> get_youtube_playlist_name('InvalidFileName.csv')
     '... InvalidFileName.csv'
     """
     m = re.search(r"^RMPlaylist_(.*)_([^_]*)\.csv$", file)
@@ -44,18 +80,48 @@ def get_youtube_playlist_name(file: str) -> str:
     return f"{time[:4]}-{time[4:6]}-{time[6:8]} {name}"
 
 
+def create_playlist(api, name):
+    """
+    Creates a new YouTube playlist using the provided name.
+
+    Args:
+        api: An authenticated YouTube API service object.
+        name (str): The name of the playlist to create.
+
+    Returns:
+        The response containing the details of the created playlist.
+    """
+    request = api.playlists().insert(
+        part="snippet,status",
+        body={
+            "snippet": {
+                "title": name,
+            },
+            "status": {
+                "privacyStatus": "public"  # you can change it to unlisted or private
+            }
+        }
+    )
+    response = request.execute()
+    return response
+
+
 def process_playlist(path: PathLike, playlist_name: str | None = None):
     """
     Processes a playlist file exported from RiMusic.
 
+    This function reads the playlist file, extracts its name, and
+    uploads it as a new playlist to YouTube. It adds each video (by
+    its MediaId) from the playlist CSV to the created YouTube playlist.
+
     Args:
         path (Pathlike): The path to the playlist file.
         playlist_name (str, optional): The name of the playlist.
-        If None, it will be extracted from the filename using
-        `get_youtube_playlist_name`. Defaults to None.
+            If None, it will be extracted from the filename using
+            `get_youtube_playlist_name`. Defaults to None.
 
     Raises:
-        AssertionError: If the path is not a CSV file.
+        AssertionError: If the file does not exist or is not a CSV.
     """
     path = Path(path)
     assert path.exists(), f"File `{path}` does not exist."
@@ -67,9 +133,34 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
 
     print(f"Processing playlist: {playlist_name}")
 
-    # TODO: Implement the processing of the playlist file.
-    # media = import_playlist(path)
-    # export_playlist(media, playlist_name)
+    creds = authenticate()
+    # read from csv file
+    data = pd.read_csv(path)
+    media_id = data['MediaId']
+    try:
+        youtube = build("youtube", "v3", credentials=creds)
+
+        playlist = create_playlist(youtube, playlist_name)
+
+        print(f"Playlist created: {playlist_name}")
+
+        # adding song to playlist
+        for song in media_id:
+            request = youtube.playlistItems().insert(
+                part="snippet",
+                body={
+                    "snippet": {
+                        "playlistId": playlist["id"],
+                        "resourceId": {
+                            "kind": "youtube#video",
+                            "videoId": song
+                        }
+                    }
+                }
+            )
+            request.execute()
+    except HttpError as e:
+        print(f"An error occurred: {e}")
 
 
 def main():

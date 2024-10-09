@@ -7,7 +7,6 @@ RiMusic to YouTube Playlist Importer
 Import playlists exported from RiMusic to YouTube.
 """
 
-from os import PathLike
 import argparse
 import re
 import datetime
@@ -106,7 +105,7 @@ def create_playlist(api, name):
     return response
 
 
-def process_playlist(path: PathLike, playlist_name: str | None = None):
+def process_playlist(path: Path, playlist_name: str | None = None):
     """
     Processes a playlist file exported from RiMusic.
 
@@ -123,10 +122,6 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
     Raises:
         AssertionError: If the file does not exist or is not a CSV.
     """
-    path = Path(path)
-    assert path.exists(), f"File `{path}` does not exist."
-    assert path.is_file(), f"Path `{path}` is not a file."
-    assert path.suffix == ".csv", f"File `{path}` is not a CSV file."
 
     if playlist_name is None:
         playlist_name = get_youtube_playlist_name(path.name)
@@ -142,10 +137,12 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
 
         playlist = create_playlist(youtube, playlist_name)
 
-        print(f"Playlist created: {playlist_name}")
+        url = f"https://www.youtube.com/playlist?list={playlist['id']}"
+        print(f"New playlist created: {url}")
 
         # adding song to playlist
         for song in media_id:
+            # TODO: progress bar
             request = youtube.playlistItems().insert(
                 part="snippet",
                 body={
@@ -179,9 +176,32 @@ def main():
 
     # TODO: add an optional argument to specify the playlist name
 
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the song names without processing the playlist.",
+    )
+
     args = parser.parse_args()
 
-    process_playlist(args.csv_playlist)
+    playlist_path = Path(args.csv_playlist)
+
+    assert playlist_path.exists(), f"File `{playlist_path}` does not exist."
+    assert playlist_path.is_file(), f"Path `{playlist_path}` is not a file."
+    assert playlist_path.suffix == ".csv", f"File `{playlist_path}` is not a CSV file."
+
+    if args.dry_run:
+        print(f"# {playlist_path.name}")
+        print("# Songs:")
+        pd.read_csv(playlist_path).apply(
+            lambda row: print(
+                f"{row['Artists']} - {row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
+            ),
+            axis=1,
+        )
+        return
+
+    process_playlist(playlist_path)
 
 
 if __name__ == "__main__":

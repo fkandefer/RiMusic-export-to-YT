@@ -13,3 +13,8 @@
     6. Create
     7. Download `client_secret.json`
 4. [Add your e-mail address as Test user](https://console.cloud.google.com/apis/credentials/consent)
+
+
+## Tips:
+
+You can use `--dry-run` mode to export playlist to Spotify with [spotlistr.com](https://www.spotlistr.com/search/textbox).

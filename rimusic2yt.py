@@ -35,13 +35,17 @@ def authenticate():
     """
     creds = None
     if os.path.exists("token.json"):
-        creds = google.oauth2.credentials.Credentials.from_authorized_user_file("token.json", SCOPES)
+        creds = google.oauth2.credentials.Credentials.from_authorized_user_file(
+            "token.json", SCOPES
+        )
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "client_secret.json", SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
         with open("token.json", "w") as token:
@@ -99,8 +103,8 @@ def create_playlist(api, name):
             },
             "status": {
                 "privacyStatus": "public"  # you can change it to unlisted or private
-            }
-        }
+            },
+        },
     )
     response = request.execute()
     return response
@@ -136,7 +140,7 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
     creds = authenticate()
     # read from csv file
     data = pd.read_csv(path)
-    media_id = data['MediaId']
+    media_id = data["MediaId"]
     try:
         youtube = build("youtube", "v3", credentials=creds)
 
@@ -151,12 +155,9 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
                 body={
                     "snippet": {
                         "playlistId": playlist["id"],
-                        "resourceId": {
-                            "kind": "youtube#video",
-                            "videoId": song
-                        }
+                        "resourceId": {"kind": "youtube#video", "videoId": song},
                     }
-                }
+                },
             )
             request.execute()
     except HttpError as e:
@@ -177,11 +178,11 @@ def main():
         help="The playlist exported from RiMusic to be processed by the script.",
     )
 
-    # TODO: add an optional argument to specify the playlist name
-
     args = parser.parse_args()
 
-    process_playlist(args.csv_playlist)
+    playlist_name = input("Podaj nazwę playlisty: ")
+
+    process_playlist(args.csv_playlist, playlist_name)
 
 
 if __name__ == "__main__":

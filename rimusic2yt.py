@@ -13,6 +13,8 @@ import re
 import datetime
 from pathlib import Path
 import os
+from tqdm import tqdm
+import time
 
 import pandas as pd
 import google.oauth2.credentials
@@ -149,7 +151,7 @@ def process_playlist(path: PathLike, playlist_name: str | None = None):
         print(f"Playlist created: {playlist_name}")
 
         # adding song to playlist
-        for song in media_id:
+        for song in tqdm(media_id):
             request = youtube.playlistItems().insert(
                 part="snippet",
                 body={

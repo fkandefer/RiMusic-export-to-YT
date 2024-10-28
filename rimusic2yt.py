@@ -19,6 +19,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from tqdm import tqdm
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
@@ -34,13 +35,17 @@ def authenticate():
     """
     creds = None
     if os.path.exists("token.json"):
-        creds = google.oauth2.credentials.Credentials.from_authorized_user_file("token.json", SCOPES)
+        creds = google.oauth2.credentials.Credentials.from_authorized_user_file(
+            "token.json", SCOPES
+        )
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "client_secret.json", SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
         with open("token.json", "w") as token:
@@ -98,8 +103,8 @@ def create_playlist(api, name):
             },
             "status": {
                 "privacyStatus": "public"  # you can change it to unlisted or private
-            }
-        }
+            },
+        },
     )
     response = request.execute()
     return response
@@ -131,7 +136,7 @@ def process_playlist(path: Path, playlist_name: str | None = None):
     creds = authenticate()
     # read from csv file
     data = pd.read_csv(path)
-    media_id = data['MediaId']
+    media_id = data["MediaId"]
     try:
         youtube = build("youtube", "v3", credentials=creds)
 
@@ -141,19 +146,16 @@ def process_playlist(path: Path, playlist_name: str | None = None):
         print(f"New playlist created: {url}")
 
         # adding song to playlist
-        for song in media_id:
-            # TODO: progress bar
+        for song in tqdm(media_id):
+
             request = youtube.playlistItems().insert(
                 part="snippet",
                 body={
                     "snippet": {
                         "playlistId": playlist["id"],
-                        "resourceId": {
-                            "kind": "youtube#video",
-                            "videoId": song
-                        }
+                        "resourceId": {"kind": "youtube#video", "videoId": song},
                     }
-                }
+                },
             )
             request.execute()
     except HttpError as e:
@@ -174,7 +176,12 @@ def main():
         help="The playlist exported from RiMusic to be processed by the script.",
     )
 
-    # TODO: add an optional argument to specify the playlist name
+    parser.add_argument(
+        "playlist_name",
+        type=str,
+        help="The name of the playlist to be created on YouTube.",
+        nargs="?",
+    )
 
     parser.add_argument(
         "--dry-run",
@@ -195,13 +202,14 @@ def main():
         print("# Songs:")
         pd.read_csv(playlist_path).apply(
             lambda row: print(
-                f"{row['Artists']} - {row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
+                f"{row['Artists']} - "
+                f"{row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
             ),
             axis=1,
         )
         return
 
-    process_playlist(playlist_path)
+    process_playlist(playlist_path, args.playlist_name)
 
 
 if __name__ == "__main__":

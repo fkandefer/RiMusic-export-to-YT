@@ -1,0 +1,32 @@
+name: Lint Code
+
+on: [ push ]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Sprawdza repozytorium
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Ustawienie wersji Pythona (dostosuj wersję do swojego projektu)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      # Instalacja zależności
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black flake8
+      
+
+      # Uruchomienie Black w trybie sprawdzania (bez automatycznej modyfikacji plików)
+      - name: Run Black
+        run: black --check . --diff --color
+
+      # Uruchomienie Flake8
+      - name: Run Flake8
+        run: flake8 . --max-line-length=88

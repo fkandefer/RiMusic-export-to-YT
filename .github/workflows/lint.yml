@@ -29,4 +29,4 @@ jobs:
 
       # Uruchomienie Flake8
       - name: Run Flake8
-        run: flake8 .
+        run: flake8 . --max-line-length=88

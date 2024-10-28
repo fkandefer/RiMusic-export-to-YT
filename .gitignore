@@ -1,6 +1,7 @@
 .timetracker
 client_secret.json
 token.json
+.idea/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

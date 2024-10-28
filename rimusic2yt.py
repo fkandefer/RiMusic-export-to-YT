@@ -179,11 +179,16 @@ def main():
         help="The playlist exported from RiMusic to be processed by the script.",
     )
 
+    parser.add_argument(
+        "playlist_name",
+        type=str,
+        help="The name of the playlist to be created on YouTube.",
+        nargs="?",
+    )
+
     args = parser.parse_args()
 
-    playlist_name = input("Podaj nazwę playlisty: ")
-
-    process_playlist(args.csv_playlist, playlist_name)
+    process_playlist(args.csv_playlist, args.playlist_name)
 
 
 if __name__ == "__main__":

@@ -236,7 +236,7 @@ def main():
 
         unique_csv = get_unique_songs(playlist_path, compare_path)
         if args.dry_run:
-            print(f"Dry run for unique songs:")
+            print("Dry run for unique songs:")
             unique_csv.apply(
                 lambda row: print(
                     f"{row['Artists']} - "

@@ -8,13 +8,13 @@ Import playlists exported from RiMusic to YouTube.
 """
 
 import argparse
-import re
 import datetime
-from pathlib import Path
 import os
+import re
+from pathlib import Path
 
-import pandas as pd
 import google.oauth2.credentials
+import pandas as pd
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -110,32 +110,25 @@ def create_playlist(api, name):
     return response
 
 
-def process_playlist(path: Path, playlist_name: str | None = None):
+def process_playlist(data: pd.DataFrame, playlist_name: str):
     """
     Processes a playlist file exported from RiMusic.
 
-    This function reads the playlist file, extracts its name, and
+    This function reads the playlist data, extracts its name, and
     uploads it as a new playlist to YouTube. It adds each video (by
-    its MediaId) from the playlist CSV to the created YouTube playlist.
+    its MediaId) from the playlist DataFrame to the created YouTube playlist.
 
     Args:
-        path (Pathlike): The path to the playlist file.
-        playlist_name (str, optional): The name of the playlist.
-            If None, it will be extracted from the filename using
-            `get_youtube_playlist_name`. Defaults to None.
+        data (pd.DataFrame): The playlist data.
+        playlist_name (str): The name of the playlist to be created on YouTube.
 
     Raises:
         AssertionError: If the file does not exist or is not a CSV.
     """
 
-    if playlist_name is None:
-        playlist_name = get_youtube_playlist_name(path.name)
-
     print(f"Processing playlist: {playlist_name}")
 
     creds = authenticate()
-    # read from csv file
-    data = pd.read_csv(path)
     media_id = data["MediaId"]
     try:
         youtube = build("youtube", "v3", credentials=creds)
@@ -153,7 +146,10 @@ def process_playlist(path: Path, playlist_name: str | None = None):
                 body={
                     "snippet": {
                         "playlistId": playlist["id"],
-                        "resourceId": {"kind": "youtube#video", "videoId": song},
+                        "resourceId": {
+                            "kind": "youtube#video",
+                            "videoId": song,
+                        },
                     }
                 },
             )
@@ -162,12 +158,36 @@ def process_playlist(path: Path, playlist_name: str | None = None):
         print(f"An error occurred: {e}")
 
 
+def get_unique_songs(main_playlist: Path, compare_playlist: Path) -> pd.DataFrame:
+    """
+    Compares two playlists and returns unique songs.
+
+    Args:
+        main_playlist (Path): Path to the main playlist file.
+        compare_playlist (Path): Path to the playlist to compare against.
+
+    Returns:
+       path to the file containing the unique songs.
+    """
+    main_data = pd.read_csv(main_playlist)
+    compare_data = pd.read_csv(compare_playlist)
+
+    main_id = set(main_data["MediaId"])
+    compare_id = set(compare_data["MediaId"])
+
+    unique_id = compare_id - main_id
+    unique = compare_data[compare_data["MediaId"].isin(unique_id)]
+
+    return unique
+
+
 def main():
     """
     Main function that creates the argument parser and processes the provided argument.
     """
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
@@ -189,6 +209,12 @@ def main():
         help="Print the song names without processing the playlist.",
     )
 
+    parser.add_argument(
+        "--already_processed",
+        type=str,
+        help="Create playlist avoiding duplicates",
+    )
+
     args = parser.parse_args()
 
     playlist_path = Path(args.csv_playlist)
@@ -196,6 +222,31 @@ def main():
     assert playlist_path.exists(), f"File `{playlist_path}` does not exist."
     assert playlist_path.is_file(), f"Path `{playlist_path}` is not a file."
     assert playlist_path.suffix == ".csv", f"File `{playlist_path}` is not a CSV file."
+
+    playlist_name = args.playlist_name
+    if playlist_name is None:
+        playlist_name = get_youtube_playlist_name(playlist_path.name)
+
+    if args.already_processed:
+        compare_path = Path(args.already_processed)
+        assert compare_path.exists(), f"File `{compare_path}` does not exist."
+        assert (
+            compare_path.suffix == ".csv"
+        ), f"File `{compare_path}` is not a CSV file."
+
+        unique_csv = get_unique_songs(playlist_path, compare_path)
+        if args.dry_run:
+            print(f"Dry run for unique songs:")
+            unique_csv.apply(
+                lambda row: print(
+                    f"{row['Artists']} - "
+                    f"{row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
+                ),
+                axis=1,
+            )
+            return
+        process_playlist(unique_csv, playlist_name)
+        return
 
     if args.dry_run:
         print(f"# {playlist_path.name}")
@@ -209,7 +260,7 @@ def main():
         )
         return
 
-    process_playlist(playlist_path, args.playlist_name)
+    process_playlist(playlist_path, playlist_name)
 
 
 if __name__ == "__main__":

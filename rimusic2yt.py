@@ -240,7 +240,11 @@ def main():
             unique_csv.apply(
                 lambda row: print(
                     f"{row['Artists']} - "
-                    f"{row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
+                    + (
+                        row["Title"][2:]
+                        if row["Title"].startswith("e:")
+                        else row["Title"]
+                    )
                 ),
                 axis=1,
             )
@@ -254,7 +258,7 @@ def main():
         pd.read_csv(playlist_path).apply(
             lambda row: print(
                 f"{row['Artists']} - "
-                f"{row['Title'][2:] if row['Title'].startswith('e:') else row['Title']}"
+                + (row["Title"][2:] if row["Title"].startswith("e:") else row["Title"])
             ),
             axis=1,
         )
